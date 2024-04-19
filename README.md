@@ -23,9 +23,9 @@ A Minimalist Plymouth Theme
 
    /* Here you can personalize the message and the color as you want. Maybe you wanna translate to your language.
     *
-    * Position 1: Messsage
-    * Position 2: Color in RGB
-    * Position 3: 1 - Enable, 2 - Disabled
+    * Position 0: Messsage
+    * Position 1: Color in RGB
+    * Position 2: 1 - Enable, 2 - Disabled
     */
    MODES["boot"] = ["Booting", [255, 255, 255], 1];
    MODES["shutdown"] = ["Shutting Down", [255, 255, 255], 1];
