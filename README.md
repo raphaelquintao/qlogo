@@ -33,7 +33,7 @@ A Minimalist Plymouth Theme
    MODES["updates"] = ["Updating...\nDon't turn off your computer", [255, 255, 255], 1];
    MODES["system-upgrade"] = ["System Upgrading...\nDon't turn off your computer", [255, 255, 255], 1];
    MODES["firmware-upgrade"] = ["Firmware Upgrading...\nDon't turn off your computer", [255, 255, 255], 1];
-   MODES["system-reset"] = ["System Reseting", [255, 255, 255], 1];
+   MODES["system-reset"] = ["System Resetting", [255, 255, 255], 1];
    ```
 
 ## Preview
