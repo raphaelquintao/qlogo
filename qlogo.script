@@ -1,0 +1,441 @@
+/*
+ * QLogo Minimalist
+ * A Minimalist Plymouth Theme.
+ *
+ * Copyright (c) 2019, Raphael Quintao <raphaelquintao@gmail.com>
+ * https://github.com/raphaelquintao
+ *
+ * Documentation about scripting available at
+ *  - https://www.freedesktop.org/wiki/Software/Plymouth/Scripts/
+ *  - https://sources.debian.org/src/plymouth/0.9.2-4/src/plugins/splash/script/ 
+ *
+ * Based on: https://gitlab.com/maurom/deb10
+ */
+
+/*-- BG --*/
+// bg_image = Image("bg.png");
+
+// Compute screen/image ratio and scale the background accordingly
+// window_max_width = Window.GetX() * 2 + Window.GetWidth();
+// window_max_height = Window.GetY() * 2 + Window.GetHeight();
+// screen_ratio = window_max_width / window_max_height;
+// bg_image_ratio = bg_image.GetWidth() / bg_image.GetHeight();
+// if (screen_ratio > bg_image_ratio) bg_scale_factor = window_max_width / bg_image.GetWidth();
+// else bg_scale_factor = window_max_height / bg_image.GetHeight();
+// scaled_bg_image = bg_image.Scale(bg_image.GetWidth() * bg_scale_factor, bg_image.GetHeight() * bg_scale_factor);
+
+// Display background
+// bg_sprite = Sprite(scaled_bg_image);
+// bg_sprite.SetPosition(Window.GetX() + Window.GetWidth() / 2 - scaled_bg_image.GetWidth() / 2, Window.GetY() + Window.GetHeight() / 2 - scaled_bg_image.GetHeight() / 2,-10000);
+
+// Constants
+LOGO_HEIGHT = 150;
+DOTS = 5;
+SHOW_PROGRESS = 0;
+FADE_OUT_DOTS = 1;
+SHOW_MODE_TEXT = 1;
+SHOW_MESSAGES = 1;
+
+MODES["boot"] = ["Booting", [255, 255, 255], 1];
+MODES["shutdown"] = ["Shutting Down", [255, 255, 255], 1];
+MODES["reboot"] = ["Rebooting", [255, 255, 255], 1];
+MODES["updates"] = ["Updating...\nDon't turn off your computer", [255, 255, 255], 1];
+MODES["system-upgrade"] = ["System Upgrading...\nDon't turn off your computer", [255, 255, 255], 1];
+MODES["firmware-upgrade"] = ["Firmware Upgrading...\nDon't turn off your computer", [255, 255, 255], 1];
+MODES["system-reset"] = ["System Reseting", [255, 255, 255], 1];
+
+
+CURVE_FUNCTION_LINEAR = 0;
+CURVE_FUNCTION_EASE_IN = 1;
+CURVE_FUNCTION_EASE_OUT = 2;
+CURVE_FUNCTION_EASE_IN_OUT = 3;
+DEG2RAD_FACTOR = Math.Pi / 180;
+M_PI_2 = Math.Pi / 2;
+
+
+fps = 13;
+anim_duration = 16087;   // miliseconds
+anim_frames = anim_duration / 1000 * fps;   // duration in seconds * frames per second
+
+// precomputed values
+percent_00 = 0;
+percent_07 = Math.Int( 7 / 100 * anim_frames);
+percent_30 = Math.Int(30 / 100 * anim_frames);
+percent_39 = Math.Int(39 / 100 * anim_frames);
+percent_70 = Math.Int(70 / 100 * anim_frames);
+percent_75 = Math.Int(75 / 100 * anim_frames);
+percent_76 = Math.Int(76 / 100 * anim_frames);
+percent_100 = anim_frames;
+
+angle_225 = 225 * DEG2RAD_FACTOR - M_PI_2;
+angle_345 = 345 * DEG2RAD_FACTOR - M_PI_2;
+angle_455 = 455 * DEG2RAD_FACTOR - M_PI_2;
+angle_690 = 690 * DEG2RAD_FACTOR - M_PI_2;
+angle_815 = 815 * DEG2RAD_FACTOR - M_PI_2;
+angle_945 = 945 * DEG2RAD_FACTOR - M_PI_2;
+
+
+// animation curve
+fun curve (value, functype, input_from, input_to, output_from, output_to) {
+    input_range = input_to - input_from;
+    output_range = output_to - output_from;
+    linear_value = (value - input_from) / input_range;
+    if (functype == CURVE_FUNCTION_LINEAR) {
+        return output_from + linear_value * output_range;
+    } else if (functype == CURVE_FUNCTION_EASE_OUT) {
+        return output_from + Math.Sin(linear_value * M_PI_2) * output_range;
+    } else if (functype == CURVE_FUNCTION_EASE_IN) {
+        return output_from + (1 - Math.Sin(M_PI_2 + linear_value * M_PI_2)) * output_range;
+    } else if (functype == CURVE_FUNCTION_EASE_IN_OUT) {
+        return output_from + (1 - Math.Sin(M_PI_2 + linear_value * Math.Pi)) / 2 * output_range;
+    } else {
+        return 0;
+    }
+}
+
+/* Load Logo */
+logo_raw = Image("logo.png");
+
+logo_scale_factor = LOGO_HEIGHT / logo_raw.GetHeight();
+
+logo.image = logo_raw.Scale(logo_raw.GetWidth() * logo_scale_factor, logo_raw.GetHeight() * logo_scale_factor);
+logo.x = Window.GetWidth() / 2 - logo.image.GetWidth() / 2;
+logo.y = Window.GetHeight() / 2 - logo.image.GetHeight() / 2;
+logo.z = 1;
+
+logo.sprite = Sprite(logo.image);
+logo.sprite.SetPosition(logo.x, logo.y, logo.z);
+logo.sprite.SetOpacity(1);
+
+
+// dots
+dot_image = Image("dot.png");
+for (i = 0; i < DOTS; i++){
+    dot[i].sprite = Sprite(dot_image);
+    dot[i].sprite.SetOpacity(0.0);
+    dot[i].sprite.SetZ(1);
+}
+
+dot_gap = Math.Int(fps - 1);
+progress = 0.0;
+// radius = 25;
+center_x = Window.GetWidth() / 2;
+center_y = logo.y + logo.image.GetHeight() + 100;
+// radius = Math.Max(15, Math.Int(Window.GetWidth()  * 25 / 1920));   // adapt to screen width (highly dependant on aspect ratio)
+radius = Math.Max(15, Math.Int(Window.GetHeight() * 25 / 1080));   // adapt to screen height (better than width)
+center_y = center_y + radius;
+opacity = 0;
+angle = 0;
+frame = 0;
+loop_count = 0;
+
+// precalculate values of x, y & opacity
+computed_x[0] = 0;
+computed_y[0] = 0;
+computed_o[0] = 0;
+for (f = 0; f < anim_frames; f++) {
+    if (f < percent_07) {
+        angle = curve(f, CURVE_FUNCTION_EASE_OUT, percent_00, percent_07, angle_225, angle_345);
+        if (FADE_OUT_DOTS) {
+            opacity = curve(f, CURVE_FUNCTION_EASE_OUT, percent_00, percent_07, 0, 1);
+        } else {
+            opacity = 1;
+        }
+    } else if (f < percent_30) {
+        angle = curve(f, CURVE_FUNCTION_LINEAR, percent_07, percent_30, angle_345, angle_455);
+        opacity = 1;    // keep
+    } else if (f < percent_39) {
+        angle = curve(f, CURVE_FUNCTION_EASE_IN_OUT, percent_30, percent_39, angle_455, angle_690);
+        opacity = 1;    // keep
+    } else if (f <= percent_70) {
+        angle = curve(f, CURVE_FUNCTION_LINEAR, percent_39, percent_70, angle_690, angle_815);
+        opacity = 1;    // keep
+    } else if (f <= percent_75) {
+        angle = curve(f, CURVE_FUNCTION_EASE_OUT, percent_70, percent_75, angle_815, angle_945);
+        if (FADE_OUT_DOTS) {
+            opacity = curve(f, CURVE_FUNCTION_EASE_OUT, percent_70, percent_75, 1, 0);
+        } else {
+            opacity = 1;
+        }
+    } else if (f <= percent_76) {
+        angle = angle_945;
+        opacity = 0;
+    } else if (f <= percent_100) {
+        angle = angle_945;
+        opacity = 0;
+    }
+    computed_x[f] = center_x + radius * Math.Sin(angle);
+    computed_y[f] = center_y - radius * Math.Cos(angle);
+    computed_o[f] = opacity;
+}
+
+
+fun refresh () {
+    inc = progress;
+
+    // logo fade-in
+    // if ((loop_count == 0) && (frame < percent_30))
+    //     logo.sprite.SetOpacity(Math.Clamp(frame / percent_30, 0, 1));
+
+    if (inc < 0.80){
+        // startup not yet finished
+        for (i = 0; i < DOTS; i++){
+            // animation delay for each dot
+            f = Math.Min(Math.Max(0, frame - i * dot_gap), anim_frames); 
+            dot[i].sprite.SetX(computed_x[f]);
+            dot[i].sprite.SetY(computed_y[f]);
+            dot[i].sprite.SetOpacity(computed_o[f]);
+        }
+    } else {
+        opacity = curve(inc, CURVE_FUNCTION_LINEAR, 0.8, 1.0, 1.0, 0.0);
+        // startup is about to end
+        for (i = 0; i < DOTS; i++){
+            // animation delay for each dot
+            f = Math.Min(Math.Max(0, frame - i * dot_gap), anim_frames);
+            dot[i].sprite.SetX(computed_x[f]);
+            dot[i].sprite.SetY(computed_y[f]);
+            dot[i].sprite.SetOpacity(computed_o[f] * opacity);
+        }
+        // logo fade-out
+        // logo.sprite.SetOpacity(opacity);
+    }
+    if (frame >= anim_frames) {
+        loop_count++;
+        frame = 0;
+    } else {
+        frame++;
+    }
+
+    if(SHOW_MODE_TEXT == 1) set_mode(frame);
+}
+
+Plymouth.SetRefreshFunction(refresh);
+
+
+
+// ----------------------------------------- Dialogue --------------------------------
+
+status = "normal";
+
+fun dialog_setup() {
+    local.box;
+    local.lock;
+    local.entry;
+    local.scaled_lock;
+    local.ibox;
+    local.msg;
+
+    local.offset_h = (logo.y ) + 30;
+    local.m = 10;
+    
+    box.image = Image("p_box.png");
+    lock.image = Image("p_lock.png");
+    entry.image = Image("p_entry.png");
+    
+    box.sprite = Sprite(box.image);
+    box.x = Window.GetWidth()  / 2 - (box.image.GetWidth()) / 2;
+    box.y = Window.GetHeight() / 2 - box.image.GetHeight() / 2 - offset_h;
+    box.z = 10000;
+    box.sprite.SetPosition(box.x, box.y, box.z);
+    
+    ibox.x = box.x + 10;
+    ibox.y = box.y - 1;
+
+    lock.sprite = Sprite(lock.image);
+    // lock.x = box.x + box.image.GetWidth() / 2 - (lock.image.GetWidth() + entry.image.GetWidth()) / 2;
+    lock.x = box.x + box.image.GetWidth() / 2 - (lock.image.GetWidth() + entry.image.GetWidth() + m) / 2;
+    lock.y = ibox.y + box.image.GetHeight() / 2 - lock.image.GetHeight() / 2 ;
+    lock.z = box.z + 1;
+    lock.sprite.SetPosition(lock.x, lock.y, lock.z);
+    
+    entry.sprite = Sprite(entry.image);
+    entry.x = lock.x + (lock.image.GetWidth() + m);
+    entry.y = ibox.y + box.image.GetHeight() / 2 - entry.image.GetHeight() / 2;
+    entry.z = box.z + 1;
+    entry.sprite.SetPosition(entry.x, entry.y, entry.z);
+    
+    global.dialog.box = box;
+    global.dialog.lock = lock;
+    global.dialog.entry = entry;
+    global.dialog.bullet_image = Image("bullet.png");
+    dialog_opacity(0.9);
+
+  }
+    
+fun dialog_opacity(opacity) {
+    dialog.box.sprite.SetOpacity(opacity);
+    dialog.lock.sprite.SetOpacity(opacity);
+    dialog.entry.sprite.SetOpacity(opacity);
+    for (index = 0; dialog.bullet[index]; index++)
+      {
+        dialog.bullet[index].sprite.SetOpacity(opacity);
+      }
+  }
+
+fun display_normal_callback () {
+    global.status = "normal";
+    if (global.dialog) dialog_opacity(0);
+  }
+
+fun display_password_callback(prompt, bullets) {
+    // bullets = 15;
+    global.status = "password";
+    if (!global.dialog) dialog_setup();
+    else dialog_opacity(1);
+    for (index = 0; dialog.bullet[index] || index < bullets; index++) {
+        if (!dialog.bullet[index]) {
+            dialog.bullet[index].sprite = Sprite(dialog.bullet_image);
+            // dialog.bullet[index].x = dialog.entry.x + index * dialog.bullet_image.GetWidth() + 2;
+            if(index == 0) {
+                // dialog.bullet[index].x = dialog.bullet[index].x + 8;
+                dialog.bullet[index].x = dialog.entry.x + 5;
+            } else {
+                dialog.bullet[index].x = dialog.bullet[index-1].x + dialog.bullet_image.GetWidth() + 1;
+            }
+            dialog.bullet[index].y = dialog.entry.y + dialog.entry.image.GetHeight() / 2 - dialog.bullet_image.GetHeight() / 2 + 1;
+            dialog.bullet[index].z = dialog.entry.z + 1;
+            dialog.bullet[index].sprite.SetPosition(dialog.bullet[index].x, dialog.bullet[index].y, dialog.bullet[index].z);
+          }
+        if (index < bullets)
+          dialog.bullet[index].sprite.SetOpacity(1);
+        else
+          dialog.bullet[index].sprite.SetOpacity(0);
+      }
+  }
+
+Plymouth.SetDisplayNormalFunction(display_normal_callback);
+Plymouth.SetDisplayPasswordFunction(display_password_callback);
+
+// MODE ----------------------------------------------------------------------------------
+mode_opacity = 0;
+mode_increase = 1;
+
+mode_text = MODES[Plymouth.GetMode()][0];
+mode_color = MODES[Plymouth.GetMode()][1];
+mode_show = MODES[Plymouth.GetMode()][2];
+if(!mode_text) {
+    mode_text = Plymouth.GetMode();
+    mode_color = [255, 255, 255];
+    mode_show = 1;
+}
+
+mode.image = Image.Text(mode_text, mode_color[0] / 255, mode_color[1] / 255, mode_color[2] / 255, 1, "DejaVu Sans 13", "center");
+mode.x = Window.GetWidth() / 2 - mode.image.GetWidth() / 2;
+mode.y = center_y + radius + 25;
+// mode.y = logo.y + logo.image.GetHeight() - mode.image.GetHeight() / 2  + 50;
+
+mode.sprite = Sprite(mode.image);
+mode.sprite.SetPosition(mode.x, mode.y, 1000000000);
+mode.sprite.SetOpacity(0);
+
+fun set_mode(frame) {
+    step = 1;
+
+    if(global.mode_opacity >= 70) global.mode_increase = 0;
+    if(global.mode_opacity <= 30) global.mode_increase = 1;
+
+    if(global.mode_increase == 1 ) global.mode_opacity += step;
+    if(global.mode_increase == 0 ) global.mode_opacity -= step;
+
+    if(global.mode_opacity > 70) global.mode_opacity = 70;
+    if(global.mode_opacity < 30) global.mode_opacity = 30;
+
+    if(global.mode_show == 1) mode.sprite.SetOpacity(global.mode_opacity / 100);
+}
+
+
+// ----------------------------------------- Progress Bar --------------------------------
+
+if (SHOW_PROGRESS) {
+    progress_bar_w = 0;
+    progress_bar_h = 3;
+    window_width = Window.GetWidth();
+    progress_bar.original_image = Image("progress_box.png");
+    progress_bar_l = Sprite(progress_bar.original_image);
+    progress_bar_l.SetX(window_width / 2);
+    progress_bar_l.SetY(Window.GetHeight() - progress_bar_h);
+    progress_bar_r = Sprite(progress_bar.original_image);
+    progress_bar_r.SetX(window_width / 2);
+    progress_bar_r.SetY(Window.GetHeight() - progress_bar_h);
+
+    fun progress_callback (duration, progress) {
+        if (progress < 0.5) {
+            progress_bar_w = Math.Int(curve(progress, CURVE_FUNCTION_LINEAR, 0, 1, 0, window_width));
+            progress_bar_l.SetX(window_width / 2 - progress_bar_w);
+        } else {
+            progress_bar_w = Math.Int(curve(progress, CURVE_FUNCTION_LINEAR, 0, 1, window_width, 0));
+            progress_bar_r.SetX(window_width - progress_bar_w);
+        }
+        progress_bar.image = progress_bar.original_image.Scale(progress_bar_w, progress_bar_h);
+        progress_bar_l.SetImage(progress_bar.image);
+        progress_bar_r.SetImage(progress_bar.image);
+    }
+
+    Plymouth.SetBootProgressFunction(progress_callback);
+}
+
+// ----------------------------------------- Quit --------------------------------
+
+fun quit_callback () {
+    logo.sprite.SetOpacity(1);
+}
+
+Plymouth.SetQuitFunction(quit_callback);
+
+// ----------------------------------------- Message --------------------------------
+
+message_sprite = Sprite();
+
+fun message_callback(text) {
+    my_image = Image.Text(text, 1, 1, 1);
+    message_sprite.SetImage(my_image);
+    message_sprite.SetPosition(Window.GetWidth() / 2 - my_image.GetWidth() / 2, 10, 10000);
+}
+
+Plymouth.SetMessageFunction(message_callback);
+
+// Update 
+update_messages;
+update_offset_index = 0;
+update_index = 0;
+
+fun show_messages() {
+    if(global.update_index > 0) {
+        for (c =  0; c <= global.update_index; c++) {
+            global.update_messages[c].sprite.SetOpacity(0);
+        }
+
+        for (j = global.update_offset_index; j <= global.update_index; j++) {
+            global.update_messages[j].y =  10 + (global.update_messages[j].image.GetHeight()) * (j - global.update_offset_index); 
+
+            global.update_messages[j].sprite.SetPosition(global.update_messages[j].x, global.update_messages[j].y, 10000);
+            global.update_messages[j].sprite.SetOpacity(1);
+        }
+    }
+}
+
+fun update_callback(msg) {
+    local.text;
+    text.image = Image.Text(msg, 1, 1, 1, 0.6, "DejaVu Sans Mono 8.5");
+    text.sprite = Sprite(text.image);
+    text.x = 10;
+    text.y = 10;
+
+    global.update_messages[global.update_index] = text;
+
+    show_messages();
+
+    global.update_index++;
+
+    if(global.update_index > 0) {
+        local.last;
+        last = global.update_messages[global.update_index-1];
+
+        if(last.y + 10 + last.image.GetHeight() >= Window.GetHeight()) {
+            global.update_offset_index++;
+        }
+    }
+
+}
+
+if(SHOW_MESSAGES == 1) Plymouth.SetUpdateStatusFunction(update_callback);

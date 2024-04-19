@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=QLogoMinimalist
+Description=Logo Minimalist Theme
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/qlogo
+ScriptFile=/usr/share/plymouth/themes/qlogo/qlogo.script
